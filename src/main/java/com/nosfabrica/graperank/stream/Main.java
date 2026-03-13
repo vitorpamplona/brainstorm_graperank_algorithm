@@ -1,4 +1,4 @@
-package org.example;
+package com.nosfabrica.graperank.stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,9 +10,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.example.grape.GrapeRankAlgorithm;
-import org.example.grape.GrapeRankResult;
-import org.example.grape.MessageQueueReturnValue;
+import com.nosfabrica.graperank.rank.GrapeRankAlgorithm;
+import com.nosfabrica.graperank.rank.GrapeRankResult;
 
 public class Main {
 

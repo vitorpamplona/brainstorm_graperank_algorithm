@@ -1,4 +1,7 @@
-package org.example.grape;
+package com.nosfabrica.graperank.rank;
+
+import com.nosfabrica.graperank.db.Neo4jHelper;
+import com.nosfabrica.graperank.db.RelationshipInfo;
 
 import java.util.Map;
 import java.util.Collections;
@@ -85,11 +88,11 @@ public class GrapeRankAlgorithm {
     }
 
     public List<GrapeRankInput> getGrapeRankInputsOfRelationships(
-            List<Neo4jHelper.RelationshipInfo> outgoingRelationships,
+            List<RelationshipInfo> outgoingRelationships,
             String observer) {
         List<GrapeRankInput> graperankInputs = new ArrayList<>();
 
-        for (Neo4jHelper.RelationshipInfo outgoingRelationshipObj : outgoingRelationships) {
+        for (RelationshipInfo outgoingRelationshipObj : outgoingRelationships) {
             String outgoingRelationship = outgoingRelationshipObj.getRelationship();
             String outgoingRelationshipTarget = outgoingRelationshipObj.getTarget();
             String outgoingRelationshipSource = outgoingRelationshipObj.getSource();
@@ -211,11 +214,11 @@ public class GrapeRankAlgorithm {
         for (List<String> usersBatch : chunked(relevantUsers, BATCH_SIZE)) {
 
             long batchStartTime = System.currentTimeMillis();
-            List<Neo4jHelper.RelationshipInfo> outgoingRelationships = neo4jHelper.getOutgoingRelationshipsBulk(
+            List<RelationshipInfo> outgoingRelationships = neo4jHelper.getOutgoingRelationshipsBulk(
                     usersBatch);
 
 
-            List<Neo4jHelper.RelationshipInfo> incomingFollowRelationships = neo4jHelper.getIncomingFollowRelationshipsBulk(
+            List<RelationshipInfo> incomingFollowRelationships = neo4jHelper.getIncomingFollowRelationshipsBulk(
                     usersBatch);
 
             
@@ -230,7 +233,7 @@ public class GrapeRankAlgorithm {
                 graperankInputs.computeIfAbsent(grprIn.getRatee(), k -> new ArrayList<>()).add(grprIn);
             }
 
-            for (Neo4jHelper.RelationshipInfo rel : incomingFollowRelationships) {
+            for (RelationshipInfo rel : incomingFollowRelationships) {
 
                 String followedUser = rel.getTarget(); 
                 String follower = rel.getSource();     

@@ -1,6 +1,4 @@
-package org.example.grape;
-
-import java.util.List;
+package com.nosfabrica.graperank.rank;
 
 public class GrapeRankInput {
     private String rater;

@@ -1,6 +1,7 @@
-package org.example.grape;
+package com.nosfabrica.graperank.stream;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.nosfabrica.graperank.rank.GrapeRankResult;
 
 public class MessageQueueReturnValue {
 

@@ -1,12 +1,11 @@
-package org.example.grape;
+package com.nosfabrica.graperank.db;
 
 import java.util.ArrayList;
 import java.util.List;
 import org.neo4j.driver.*;
 import org.neo4j.driver.Record;
-import org.neo4j.driver.util.Pair;
 
-public class Neo4jHelper {
+public class Neo4jHelper implements IGraphDB {
 
     private final Driver driver;
 
@@ -19,6 +18,7 @@ public class Neo4jHelper {
         this.driver = GraphDatabase.driver(uri, AuthTokens.basic(username, password));
     }
 
+    @Override
     public List<String> getUsersConnectedToObserver(String observer, Integer hopsLimit) {
         String hopsLimitStr = (hopsLimit != null) ? hopsLimit.toString() : "";
 
@@ -71,6 +71,7 @@ public class Neo4jHelper {
         }
     }
 
+    @Override
     public List<RelationshipInfo> getIncomingFollowRelationshipsBulk(List<String> pubkeys) {
         String query =
                 "UNWIND $pubkeys AS pubkey " +
@@ -102,6 +103,7 @@ public class Neo4jHelper {
     }
 
 
+    @Override
     public List<RelationshipInfo> getOutgoingRelationshipsBulk(List<String> pubkeys) {
         String query =
                 "UNWIND $pubkeys AS pubkey " +
@@ -154,39 +156,6 @@ public class Neo4jHelper {
                     "source='" + sourcePubkey + '\'' +
                     ", target='" + targetPubkey + '\'' +
                     ", distance='" + distance + '\'' +
-                    '}';
-        }
-    }
-
-    public static class RelationshipInfo {
-        private String source;
-        private String relationship;
-        private String target;
-
-        public RelationshipInfo(String source, String relationship, String target) {
-            this.source = source;
-            this.relationship = relationship;
-            this.target = target;
-        }
-
-        public String getSource() {
-            return source;
-        }
-
-        public String getRelationship() {
-            return relationship;
-        }
-
-        public String getTarget() {
-            return target;
-        }
-
-        @Override
-        public String toString() {
-            return "RelationshipInfo{" +
-                    "source='" + source + '\'' +
-                    ", relationship='" + relationship + '\'' +
-                    ", target='" + target + '\'' +
                     '}';
         }
     }

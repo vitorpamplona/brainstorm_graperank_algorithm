@@ -1,10 +1,9 @@
-package org.example;
+package com.nosfabrica.graperank.stream;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
-import org.example.grape.GrapeRankAlgorithm;
-import org.example.grape.GrapeRankResult;
-import org.neo4j.driver.*;
+import com.nosfabrica.graperank.rank.GrapeRankAlgorithm;
+import com.nosfabrica.graperank.rank.GrapeRankResult;
 
 public class MainTest {
 
