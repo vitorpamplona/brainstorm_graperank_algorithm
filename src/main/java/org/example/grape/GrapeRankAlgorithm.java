@@ -207,6 +207,8 @@ public class GrapeRankAlgorithm {
 
         Map<String, List<String>> followersByUser = new HashMap<>();
 
+        Map<String, List<String>> reportersByUser = new HashMap<>();
+
         int iteration = 0;
         for (List<String> usersBatch : chunked(relevantUsers, BATCH_SIZE)) {
 
@@ -216,6 +218,9 @@ public class GrapeRankAlgorithm {
 
 
             List<Neo4jHelper.RelationshipInfo> incomingFollowRelationships = neo4jHelper.getIncomingFollowRelationshipsBulk(
+                    usersBatch);
+
+            List<Neo4jHelper.RelationshipInfo> incomingReportRelationships = neo4jHelper.getIncomingReportRelationshipsBulk(
                     usersBatch);
 
             
@@ -240,6 +245,16 @@ public class GrapeRankAlgorithm {
                     .add(follower);
             }
 
+            for (Neo4jHelper.RelationshipInfo rel : incomingReportRelationships) {
+
+                String reportedUser = rel.getTarget(); 
+                String reporter = rel.getSource();     
+
+                reportersByUser
+                    .computeIfAbsent(reportedUser, k -> new ArrayList<>())
+                    .add(reporter);
+            }
+
             iteration++;
         }
 
@@ -262,7 +277,7 @@ public class GrapeRankAlgorithm {
             List<String> followers = followersByUser.getOrDefault(userPubkey, Collections.emptyList());
 
 
-            long trustedCount = followers.stream()
+            long trustedFollowersCount = followers.stream()
                 .filter(followerPubkey -> {
                     ScoreCard followerScoreCard = finalScorecards.get(followerPubkey);
                     return followerScoreCard != null && followerScoreCard.getInfluence() > Constants.DEFAULT_CUTOFF_OF_VALID_USER;
@@ -270,7 +285,22 @@ public class GrapeRankAlgorithm {
                 .count();
 
 
-            scoreCard.setTrustedFollowers((double) trustedCount);
+            scoreCard.setTrustedFollowers((double) trustedFollowersCount);
+
+            //
+
+            List<String> reporters = reportersByUser.getOrDefault(userPubkey, Collections.emptyList());
+
+
+            long trustedReportersCount = reporters.stream()
+                .filter(reporterPubkey -> {
+                    ScoreCard reporterScoreCard = finalScorecards.get(reporterPubkey);
+                    return reporterScoreCard != null && reporterScoreCard.getInfluence() > Constants.DEFAULT_CUTOFF_OF_TRUSTED_REPORTER;
+                })
+                .count();
+
+
+            scoreCard.setTrustedReporters((double) trustedReportersCount);
         }
 
 

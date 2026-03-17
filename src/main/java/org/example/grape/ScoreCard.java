@@ -15,6 +15,9 @@ public class ScoreCard {
     @JsonProperty("trusted_followers")
     private double trustedFollowers = 0;
 
+    @JsonProperty("trusted_reporters")
+    private double trustedReporters = 0;
+
     public ScoreCard(String observer, String observee, double hops) {
         this.observer = observer;
         this.observee = observee;
@@ -111,5 +114,13 @@ public class ScoreCard {
 
     public void setTrustedFollowers(double trustedFollowers) {
         this.trustedFollowers = trustedFollowers;
+    }
+
+    public double getTrustedReporters() {
+        return trustedReporters;
+    }
+
+    public void setTrustedReporters(double trustedReporters) {
+        this.trustedReporters = trustedReporters;
     }
 }

@@ -101,6 +101,36 @@ public class Neo4jHelper {
         return resultList;
     }
 
+    public List<RelationshipInfo> getIncomingReportRelationshipsBulk(List<String> pubkeys) {
+        String query =
+                "UNWIND $pubkeys AS pubkey " +
+                "MATCH (u:NostrUser {pubkey: pubkey}) " +
+                "MATCH (source:NostrUser)-[r:REPORTS]->(u) " +
+                "RETURN source.pubkey AS source, " +
+                "       type(r) AS relationship, " +
+                "       u.pubkey AS target";
+
+        List<RelationshipInfo> resultList = new ArrayList<>();
+
+        try (Session session = driver.session()) {
+            session.executeRead(tx -> {
+                Result result = tx.run(query, Values.parameters("pubkeys", pubkeys));
+
+                while (result.hasNext()) {
+                    Record record = result.next();
+                    resultList.add(new RelationshipInfo(
+                            record.get("source").asString(),
+                            record.get("relationship").asString(),
+                            record.get("target").asString()
+                    ));
+                }
+                return null;
+            });
+        }
+
+        return resultList;
+    }
+
 
     public List<RelationshipInfo> getOutgoingRelationshipsBulk(List<String> pubkeys) {
         String query =

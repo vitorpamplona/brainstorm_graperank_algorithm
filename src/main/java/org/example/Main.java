@@ -40,7 +40,7 @@ public class Main {
 
                         if (result != null && result.size() == 2) {
                             String message = result.get(1);
-                            executor.submit(() -> processMessage(message));
+                            processMessage(message);
                         }
 
                     } catch (JedisConnectionException e) {
