@@ -79,6 +79,7 @@ The generator replicates the same rating/confidence logic used by `GrapeRankAlgo
 | 4 | **DenseSocialNetwork** | 5,000 | 97,156 | 7,346 | 2,217 | 789 | Realistic social graph with power-law degree distribution |
 | 5 | **LargeScaleNetwork** | 20,000 | 290,121 | 15,167 | 4,428 | 2024 | Pure performance stress test at scale |
 | 6 | **AdversarialNetwork** | 2,000 | 29,344 | 888 | 785 | 1337 | Tests algorithm's resilience to malicious actors |
+| 7 | **MassiveNetwork** | 2,000,000 | 39,006,551 | 3,000,639 | 897,107 | 999999 | Production-scale benchmark with popular observer |
 
 #### Graph Descriptions
 
@@ -99,6 +100,42 @@ Structurally similar to DenseSocialNetwork but 4x larger: 200 observer follows, 
 
 **6. AdversarialNetwork (2,000 users)**
 Explicitly splits users into 1,000 "good" and 1,000 "bad" actors. Good users follow each other densely and report bad users. Bad users follow each other, mute good users, and try to look legitimate by following some good users. Some bad users also adversarially report good users. The observer is in the good group and follows 50 good users. Tests that the algorithm correctly assigns higher influence to the good community and that adversarial mutes/reports from untrusted users don't corrupt the scores.
+
+**7. MassiveNetwork (2,000,000 users)**
+Production-scale graph where the observer is a **popular user**: follows 2,000 accounts (biased toward other popular users) and is followed back by ~5,000 users. Each user follows 12-27 others (avg ~20) with power-law preferential attachment, ~50% of users mute 1-5 others, ~10% file 1-8 reports. Produces ~43M total edges. Too large for the correctness test suite — used only via the benchmark. Called separately via `TestGraphGenerator.massiveNetwork()`.
+
+### MassiveNetwork Benchmark Results (2M users, 10GB heap)
+
+```
+Graph:         2,000,000 users
+Follows:      39,006,551  (19.5/user avg)
+Mutes:         3,000,639  (1.5/user avg)
+Reports:         897,107  (0.4/user avg)
+Total edges:  42,904,297
+Convergence:   5 rounds
+Median time:   94.1 seconds
+Throughput:    21,253 users/sec
+Heap used:     4,982 MB
+```
+
+#### Score Distribution
+
+| Influence range | Users | % of total |
+|-----------------|------:|-----------:|
+| Zero (= 0) | 127,119 | 6.4% |
+| Tiny (0, 0.0001) | 1,649,780 | 82.5% |
+| Small [0.0001, 0.001) | 182,738 | 9.1% |
+| Low [0.001, 0.02) | 38,362 | 1.9% |
+| Verified (>= 0.02) | 2,000 | 0.1% |
+| High influence (>= 0.1) | 2,000 | 0.1% |
+| **Total non-zero** | **1,872,880** | **93.6%** |
+
+#### Analysis
+
+- **93.6% of users get non-zero influence** — the popular observer's dense follow network reaches nearly the entire graph within 8 hops.
+- **82.5% are tiny scores (below 0.0001)** — the algorithm spends most of its time computing scores that have no practical effect. This is the clearest optimization target for the algorithm step itself: skipping or batching users below a threshold could cut workload dramatically.
+- **2,000 verified users** — matches the observer's 2,000 direct follows. The observer's high-confidence follow rating (0.5) is the primary path to verification; indirect paths through low-confidence (0.03) follow ratings rarely accumulate enough weight to cross the 0.02 cutoff.
+- **Max non-observer influence is 0.277** (user000003) — even the most influential users are far below the observer's 1.0, showing the attenuation factor working as designed.
 
 ---
 
@@ -199,4 +236,18 @@ Measures execution time of the core `graperankAlgorithm()` method across all six
 3. Run `GrapeRankCorrectnessTest` first — if fingerprints pass, results are unchanged
 4. Run the benchmark again and compare median timings
 
-The LargeScaleNetwork (20K users, 290K follows) is the most useful graph for performance work because it runs long enough (~200ms) to produce stable timings, while being large enough to expose algorithmic inefficiencies (O(n^2) vs O(n) behavior, cache misses, excessive object allocation, etc.).
+For quick iteration, use LargeScaleNetwork (20K users, ~200ms per run). For validating at production scale, use MassiveNetwork (2M users, ~94s per run, requires `-Xmx10g`).
+
+#### Benchmark Baseline (all graphs)
+
+| Graph | Users | Edges | Rounds | Median | Throughput |
+|-------|------:|------:|-------:|-------:|-----------:|
+| LinearChain | 100 | 115 | 3 | 0.2 ms | 513K users/sec |
+| StarGraph | 501 | 675 | 4 | 1.0 ms | 501K users/sec |
+| CommunityClusters | 1,001 | 14,819 | 4 | 2.1 ms | 478K users/sec |
+| DenseSocialNetwork | 5,000 | 106,719 | 5 | 28.8 ms | 170K users/sec |
+| AdversarialNetwork | 2,000 | 31,017 | 5 | 4.7 ms | 416K users/sec |
+| LargeScaleNetwork | 20,000 | 309,716 | 4 | 194.5 ms | 102K users/sec |
+| **MassiveNetwork** | **2,000,000** | **42,904,297** | **5** | **94.1 s** | **21K users/sec** |
+
+Throughput drops from ~500K users/sec on small graphs to ~21K users/sec at 2M users, a ~24x decline. This is driven by increasing HashMap lookup cost as the map grows beyond CPU cache, and by the higher edge density (19.5 follows/user vs 7-8 on smaller graphs).
