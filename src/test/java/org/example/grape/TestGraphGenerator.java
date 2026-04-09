@@ -599,7 +599,9 @@ public class TestGraphGenerator {
     // ========================================================================
     // Graph 7: Massive Network  (~2,000,000 users)
     //   Realistic large-scale social graph for serious performance testing.
-    //   Average ~8 follows, ~0.3 mutes, ~0.1 reports per user.
+    //   The observer is a "popular user" — follows 2,000 accounts and is
+    //   followed back by many of them, creating a dense trust neighbourhood.
+    //   Average ~20 follows, ~2 mutes, ~0.5 reports per user.
     //   Power-law degree distribution via preferential attachment.
     //   Too large for the standard correctness suite — run via benchmark only.
     // ========================================================================
@@ -607,7 +609,7 @@ public class TestGraphGenerator {
         int totalUsers = 2_000_000;
         String observer = userId(0);
         Set<String> users = new LinkedHashSet<>(totalUsers * 2);
-        List<Edge> edges = new ArrayList<>(totalUsers * 10);
+        List<Edge> edges = new ArrayList<>(totalUsers * 25);
         Random rng = new Random(999_999);
 
         System.out.println("  [MassiveNetwork] Creating " + totalUsers + " users...");
@@ -615,23 +617,38 @@ public class TestGraphGenerator {
             users.add(userId(i));
         }
 
-        // Observer follows 500 users
-        System.out.println("  [MassiveNetwork] Adding observer follows...");
-        Set<Integer> picked = new HashSet<>();
-        int count = 0;
-        while (count < 500) {
-            int idx = 1 + rng.nextInt(totalUsers - 1);
-            if (picked.add(idx)) {
+        // Observer is a popular user — follows 2,000 accounts
+        System.out.println("  [MassiveNetwork] Adding observer follows (popular user, 2000 follows)...");
+        Set<Integer> observerFollows = new HashSet<>();
+        while (observerFollows.size() < 2000) {
+            // Bias toward lower IDs (other popular users) for first half,
+            // uniform for second half — mimics a real popular account
+            int idx;
+            if (observerFollows.size() < 1000) {
+                idx = 1 + (int) (Math.pow(rng.nextDouble(), 2.0) * Math.min(50_000, totalUsers - 1));
+            } else {
+                idx = 1 + rng.nextInt(totalUsers - 1);
+            }
+            if (observerFollows.add(idx)) {
                 edges.add(new Edge(observer, userId(idx), "FOLLOWS"));
-                count++;
             }
         }
 
-        // Each user follows ~8 others (power-law distribution)
-        System.out.println("  [MassiveNetwork] Adding follow edges...");
+        // Many users follow the observer back (popular user has many followers).
+        // ~5,000 users follow the observer — this creates dense inbound ratings.
+        System.out.println("  [MassiveNetwork] Adding followers of observer (popular user, ~5000 followers)...");
+        for (int i = 1; i < totalUsers; i++) {
+            if (rng.nextDouble() < 0.0025) { // ~5,000 users
+                edges.add(new Edge(userId(i), observer, "FOLLOWS"));
+            }
+        }
+
+        // Each non-observer user follows ~20 others (power-law distribution).
+        // Lower-ID users are more popular (preferential attachment).
+        System.out.println("  [MassiveNetwork] Adding follow edges (~20/user)...");
         for (int i = 1; i < totalUsers; i++) {
             String src = userId(i);
-            int followCount = 4 + rng.nextInt(8); // 4-11 follows
+            int followCount = 12 + rng.nextInt(16); // 12-27 follows, avg ~20
             Set<Integer> targets = new HashSet<>();
             for (int f = 0; f < followCount; f++) {
                 int target = (int) (Math.pow(rng.nextDouble(), 1.5) * totalUsers);
@@ -641,11 +658,11 @@ public class TestGraphGenerator {
             }
         }
 
-        // Mutes: ~0.3 per user
-        System.out.println("  [MassiveNetwork] Adding mutes...");
+        // Mutes: ~2 per user on average
+        System.out.println("  [MassiveNetwork] Adding mutes (~2/user)...");
         for (int i = 0; i < totalUsers; i++) {
-            if (rng.nextDouble() < 0.15) {
-                int muteCount = 1 + rng.nextInt(3);
+            if (rng.nextDouble() < 0.5) {
+                int muteCount = 1 + rng.nextInt(5); // 1-5 mutes
                 for (int m = 0; m < muteCount; m++) {
                     int target = rng.nextInt(totalUsers);
                     if (target != i) {
@@ -655,11 +672,11 @@ public class TestGraphGenerator {
             }
         }
 
-        // Reports: ~0.1 per user
-        System.out.println("  [MassiveNetwork] Adding reports...");
+        // Reports: ~0.5 per user on average
+        System.out.println("  [MassiveNetwork] Adding reports (~0.5/user)...");
         for (int i = 0; i < totalUsers; i++) {
-            if (rng.nextDouble() < 0.04) {
-                int reportCount = 1 + rng.nextInt(4);
+            if (rng.nextDouble() < 0.1) {
+                int reportCount = 1 + rng.nextInt(8); // 1-8 reports
                 for (int r = 0; r < reportCount; r++) {
                     int target = rng.nextInt(totalUsers);
                     if (target != i) {
