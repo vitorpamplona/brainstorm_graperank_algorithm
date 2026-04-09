@@ -13,7 +13,35 @@ java -cp target/classes:target/test-classes org.example.grape.GrapeRankCorrectne
 
 # Performance benchmark
 java -cp target/classes:target/test-classes org.example.grape.GrapeRankBenchmark
+
+# Massive network benchmark (2M users, needs -Xmx10g)
+java -Xmx10g -cp target/classes:target/test-classes org.example.grape.GrapeRankBenchmark massive
 ```
+
+---
+
+## Production Pipeline Cost Breakdown (`graperankAllSteps`)
+
+The full production pipeline for one observer on a 2M-user network takes approximately **20 minutes**. The table below shows where that time goes:
+
+| Step | What it does | Neo4j queries | Est. time | % of total | Benchmarked? |
+|------|-------------|:-------------:|----------:|-----------:|:------------:|
+| **1. Find reachable users** | `getUsersConnectedToObserver(observer, 992)` — variable-length path traversal `[:FOLLOWS*1..992]` across the entire graph to discover all users the observer can reach | 1 | 60-120s | 5-10% | No |
+| **2. Compute hop distances** | 8 separate `getUsersConnectedToObserver` calls (hops 1 through 8), each re-traversing the graph from scratch to find users within N hops. Neo4j does not reuse BFS results between calls, so most of the work is done 8 times | 8 | 240-480s | 20-40% | No |
+| **3. Fetch relationships** | For each batch of 1,000 users: 3 queries (outgoing `FOLLOWS\|MUTES\|REPORTS`, incoming `FOLLOWS`, incoming `REPORTS`). With 2M users = 2,000 batches x 3 queries = 6,000 Neo4j round-trips, each UNWINDing 1,000 pubkeys | ~6,000 | 480-600s | 40-50% | No |
+| **4. Run algorithm** | `graperankAlgorithm()` — the iterative influence computation. 4-5 rounds over 2M scorecards with ~43M edge evaluations per round | 0 | ~94s | ~8% | **Yes** |
+| **5. Count trusted followers** | For each of 2M users, iterate their follower list and check each follower's influence against cutoff thresholds. ~39M HashMap lookups | 0 | 30-60s | 2-5% | No |
+| | | **~6,009** | **~1,200s** | **100%** | |
+
+### Key insight
+
+**Neo4j I/O (steps 1-3) accounts for ~90% of the 20-minute runtime.** The algorithm itself (step 4) is only ~8%. This benchmark suite currently measures step 4 in isolation, which is the right approach for optimizing the algorithm math, but the biggest overall wins would come from:
+
+- **Step 2**: Replace 8 separate traversals with a single BFS query that returns users with their shortest-path distance (e.g., `shortestPath()` or APOC procedures). This alone could save 200-400s.
+- **Step 3**: Increase `BATCH_SIZE` beyond 1,000, combine the 3 per-batch queries into 1, or fetch all relationships in a single query. Reducing 6,000 round-trips to hundreds would save 300-500s.
+- **Step 1**: The `[:FOLLOWS*1..992]` traversal is essentially unbounded. If the algorithm only uses hops up to 8 for distance scoring, this could potentially use `[:FOLLOWS*1..8]` instead, matching step 2.
+
+---
 
 ## Strategy
 
