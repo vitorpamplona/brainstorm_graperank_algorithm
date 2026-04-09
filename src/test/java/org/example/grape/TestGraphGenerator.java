@@ -596,7 +596,84 @@ public class TestGraphGenerator {
         return assemble("AdversarialNetwork_2000", observer, edges, users);
     }
 
-    /** Returns all six test graphs in order of increasing size. */
+    // ========================================================================
+    // Graph 7: Massive Network  (~2,000,000 users)
+    //   Realistic large-scale social graph for serious performance testing.
+    //   Average ~8 follows, ~0.3 mutes, ~0.1 reports per user.
+    //   Power-law degree distribution via preferential attachment.
+    //   Too large for the standard correctness suite — run via benchmark only.
+    // ========================================================================
+    public static TestGraph massiveNetwork() {
+        int totalUsers = 2_000_000;
+        String observer = userId(0);
+        Set<String> users = new LinkedHashSet<>(totalUsers * 2);
+        List<Edge> edges = new ArrayList<>(totalUsers * 10);
+        Random rng = new Random(999_999);
+
+        System.out.println("  [MassiveNetwork] Creating " + totalUsers + " users...");
+        for (int i = 0; i < totalUsers; i++) {
+            users.add(userId(i));
+        }
+
+        // Observer follows 500 users
+        System.out.println("  [MassiveNetwork] Adding observer follows...");
+        Set<Integer> picked = new HashSet<>();
+        int count = 0;
+        while (count < 500) {
+            int idx = 1 + rng.nextInt(totalUsers - 1);
+            if (picked.add(idx)) {
+                edges.add(new Edge(observer, userId(idx), "FOLLOWS"));
+                count++;
+            }
+        }
+
+        // Each user follows ~8 others (power-law distribution)
+        System.out.println("  [MassiveNetwork] Adding follow edges...");
+        for (int i = 1; i < totalUsers; i++) {
+            String src = userId(i);
+            int followCount = 4 + rng.nextInt(8); // 4-11 follows
+            Set<Integer> targets = new HashSet<>();
+            for (int f = 0; f < followCount; f++) {
+                int target = (int) (Math.pow(rng.nextDouble(), 1.5) * totalUsers);
+                if (target != i && targets.add(target)) {
+                    edges.add(new Edge(src, userId(target), "FOLLOWS"));
+                }
+            }
+        }
+
+        // Mutes: ~0.3 per user
+        System.out.println("  [MassiveNetwork] Adding mutes...");
+        for (int i = 0; i < totalUsers; i++) {
+            if (rng.nextDouble() < 0.15) {
+                int muteCount = 1 + rng.nextInt(3);
+                for (int m = 0; m < muteCount; m++) {
+                    int target = rng.nextInt(totalUsers);
+                    if (target != i) {
+                        edges.add(new Edge(userId(i), userId(target), "MUTES"));
+                    }
+                }
+            }
+        }
+
+        // Reports: ~0.1 per user
+        System.out.println("  [MassiveNetwork] Adding reports...");
+        for (int i = 0; i < totalUsers; i++) {
+            if (rng.nextDouble() < 0.04) {
+                int reportCount = 1 + rng.nextInt(4);
+                for (int r = 0; r < reportCount; r++) {
+                    int target = rng.nextInt(totalUsers);
+                    if (target != i) {
+                        edges.add(new Edge(userId(i), userId(target), "REPORTS"));
+                    }
+                }
+            }
+        }
+
+        System.out.println("  [MassiveNetwork] Assembling graph (" + edges.size() + " edges)...");
+        return assemble("MassiveNetwork_2000000", observer, edges, users);
+    }
+
+    /** Returns all six standard test graphs in order of increasing size. */
     public static List<TestGraph> allGraphs() {
         List<TestGraph> graphs = new ArrayList<>();
         graphs.add(linearChain());
