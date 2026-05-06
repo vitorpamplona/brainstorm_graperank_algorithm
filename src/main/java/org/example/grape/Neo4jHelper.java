@@ -71,6 +71,67 @@ public class Neo4jHelper {
         }
     }
 
+    /**
+     * Fetches outgoing FOLLOWS/REPORTS/MUTES, incoming FOLLOWS, and incoming REPORTS
+     * relationships for a batch of users in a single Cypher round-trip. The query
+     * tags each row with a direction marker ('OUT', 'IN_FOLLOW', 'IN_REPORT') so
+     * results can be split into the three lists the GrapeRank algorithm expects.
+     */
+    public BatchedRelationships getAllRelationshipsBulk(List<String> pubkeys) {
+        String query =
+                "UNWIND $pubkeys AS pk " +
+                "MATCH (u:NostrUser {pubkey: pk}) " +
+                "CALL { " +
+                "  WITH u " +
+                "  MATCH (u)-[r:FOLLOWS|REPORTS|MUTES]->(t:NostrUser) " +
+                "  RETURN u.pubkey AS source, type(r) AS relationship, t.pubkey AS target, 'OUT' AS dir " +
+                "  UNION " +
+                "  WITH u " +
+                "  MATCH (s:NostrUser)-[r:FOLLOWS]->(u) " +
+                "  RETURN s.pubkey AS source, type(r) AS relationship, u.pubkey AS target, 'IN_FOLLOW' AS dir " +
+                "  UNION " +
+                "  WITH u " +
+                "  MATCH (s:NostrUser)-[r:REPORTS]->(u) " +
+                "  RETURN s.pubkey AS source, type(r) AS relationship, u.pubkey AS target, 'IN_REPORT' AS dir " +
+                "} " +
+                "RETURN source, relationship, target, dir";
+
+        List<RelationshipInfo> outgoing = new ArrayList<>();
+        List<RelationshipInfo> incomingFollow = new ArrayList<>();
+        List<RelationshipInfo> incomingReport = new ArrayList<>();
+
+        try (Session session = driver.session()) {
+            session.executeRead(tx -> {
+                Result result = tx.run(query, Values.parameters("pubkeys", pubkeys));
+
+                while (result.hasNext()) {
+                    Record record = result.next();
+                    RelationshipInfo info = new RelationshipInfo(
+                            record.get("source").asString(),
+                            record.get("relationship").asString(),
+                            record.get("target").asString()
+                    );
+                    String dir = record.get("dir").asString();
+                    switch (dir) {
+                        case "OUT":
+                            outgoing.add(info);
+                            break;
+                        case "IN_FOLLOW":
+                            incomingFollow.add(info);
+                            break;
+                        case "IN_REPORT":
+                            incomingReport.add(info);
+                            break;
+                    }
+                }
+                return null;
+            });
+        }
+
+        return new BatchedRelationships(outgoing, incomingFollow, incomingReport);
+    }
+
+    @Deprecated
     public List<RelationshipInfo> getIncomingFollowRelationshipsBulk(List<String> pubkeys) {
         String query =
                 "UNWIND $pubkeys AS pubkey " +
@@ -101,6 +162,7 @@ public class Neo4jHelper {
         return resultList;
     }
 
+    @Deprecated
     public List<RelationshipInfo> getIncomingReportRelationshipsBulk(List<String> pubkeys) {
         String query =
                 "UNWIND $pubkeys AS pubkey " +
@@ -132,6 +194,7 @@ public class Neo4jHelper {
     }
 
 
+    @Deprecated
     public List<RelationshipInfo> getOutgoingRelationshipsBulk(List<String> pubkeys) {
         String query =
                 "UNWIND $pubkeys AS pubkey " +
@@ -186,6 +249,24 @@ public class Neo4jHelper {
                     ", distance='" + distance + '\'' +
                     '}';
         }
+    }
+
+    public static class BatchedRelationships {
+        private final List<RelationshipInfo> outgoing;
+        private final List<RelationshipInfo> incomingFollow;
+        private final List<RelationshipInfo> incomingReport;
+
+        public BatchedRelationships(List<RelationshipInfo> outgoing,
+                                    List<RelationshipInfo> incomingFollow,
+                                    List<RelationshipInfo> incomingReport) {
+            this.outgoing = outgoing;
+            this.incomingFollow = incomingFollow;
+            this.incomingReport = incomingReport;
+        }
+
+        public List<RelationshipInfo> getOutgoing() { return outgoing; }
+        public List<RelationshipInfo> getIncomingFollow() { return incomingFollow; }
+        public List<RelationshipInfo> getIncomingReport() { return incomingReport; }
     }
 
     public static class RelationshipInfo {
