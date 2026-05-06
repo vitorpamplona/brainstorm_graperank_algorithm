@@ -213,15 +213,10 @@ public class GrapeRankAlgorithm {
         for (List<String> usersBatch : chunked(relevantUsers, BATCH_SIZE)) {
 
             long batchStartTime = System.currentTimeMillis();
-            List<Neo4jHelper.RelationshipInfo> outgoingRelationships = neo4jHelper.getOutgoingRelationshipsBulk(
-                    usersBatch);
-
-
-            List<Neo4jHelper.RelationshipInfo> incomingFollowRelationships = neo4jHelper.getIncomingFollowRelationshipsBulk(
-                    usersBatch);
-
-            List<Neo4jHelper.RelationshipInfo> incomingReportRelationships = neo4jHelper.getIncomingReportRelationshipsBulk(
-                    usersBatch);
+            Neo4jHelper.BatchedRelationships batched = neo4jHelper.getAllRelationshipsBulk(usersBatch);
+            List<Neo4jHelper.RelationshipInfo> outgoingRelationships = batched.getOutgoing();
+            List<Neo4jHelper.RelationshipInfo> incomingFollowRelationships = batched.getIncomingFollow();
+            List<Neo4jHelper.RelationshipInfo> incomingReportRelationships = batched.getIncomingReport();
 
             
             long batchEndTime = System.currentTimeMillis();
