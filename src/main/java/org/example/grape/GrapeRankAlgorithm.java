@@ -33,14 +33,8 @@ public class GrapeRankAlgorithm {
 
                 for (GrapeRankInput relevantDataPoint : relevantDataPoints) {
                     double infOfRater = graperankScorecards.get(relevantDataPoint.getRater()).getInfluence();
-                    double weight = relevantDataPoint.getConfidence()
-                            * infOfRater
-                            * Constants.GLOBAL_ATTENUATION_FACTOR;
-
-                    double wxr = weight * relevantDataPoint.getRating();
-
-                    sumOfWeights += weight;
-                    sumOfWxr += wxr;
+                    sumOfWeights += relevantDataPoint.getCAtt() * infOfRater;
+                    sumOfWxr += relevantDataPoint.getCAttR() * infOfRater;
                 }
 
                 double avgScore = (sumOfWeights != 0) ? sumOfWxr / sumOfWeights : 0;

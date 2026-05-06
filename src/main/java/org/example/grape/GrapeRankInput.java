@@ -8,12 +8,24 @@ public class GrapeRankInput {
     private String context = "not a bot"; // Default value
     private double rating;
     private double confidence;
+    private final double cAtt;
+    private final double cAttR;
 
     public GrapeRankInput(String rater, String ratee, double rating, double confidence) {
         this.rater = rater;
         this.ratee = ratee;
         this.rating = rating;
         this.confidence = confidence;
+        this.cAtt = confidence * Constants.GLOBAL_ATTENUATION_FACTOR;
+        this.cAttR = this.cAtt * rating;
+    }
+
+    public double getCAtt() {
+        return cAtt;
+    }
+
+    public double getCAttR() {
+        return cAttR;
     }
 
     public String getRater() {
