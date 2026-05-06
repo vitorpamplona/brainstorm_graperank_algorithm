@@ -177,25 +177,13 @@ public class GrapeRankAlgorithm {
 
         Neo4jHelper neo4jHelper = new Neo4jHelper();
 
+        // Kept unbounded so users beyond 8 hops still appear in relevantUsers (with
+        // default distance 999); drop if data is verified to have no hops > 8.
         List<String> relevantUsers = neo4jHelper.getUsersConnectedToObserver(observer, 992);
         Map<String, Double> userDistanceMap = new HashMap<>();
 
-        Map<Integer, List<String>> hopsMap = new HashMap<>();
-        hopsMap.put(8, neo4jHelper.getUsersConnectedToObserver(observer, 8));
-        hopsMap.put(7, neo4jHelper.getUsersConnectedToObserver(observer, 7));
-        hopsMap.put(6, neo4jHelper.getUsersConnectedToObserver(observer, 6));
-        hopsMap.put(5, neo4jHelper.getUsersConnectedToObserver(observer, 5));
-        hopsMap.put(4, neo4jHelper.getUsersConnectedToObserver(observer, 4));
-        hopsMap.put(3, neo4jHelper.getUsersConnectedToObserver(observer, 3));
-        hopsMap.put(2, neo4jHelper.getUsersConnectedToObserver(observer, 2));
-        hopsMap.put(1, neo4jHelper.getUsersConnectedToObserver(observer, 1));
-
-
-        for (int hop = 8; hop >= 1; hop--) {
-            List<String> usersAtHop = hopsMap.get(hop);
-            for (String user : usersAtHop) {
-                userDistanceMap.put(user, (double) hop);
-            }
+        for (Map.Entry<String, Integer> entry : neo4jHelper.getUsersWithHopsToObserver(observer, 8)) {
+            userDistanceMap.put(entry.getKey(), (double) entry.getValue());
         }
 
 

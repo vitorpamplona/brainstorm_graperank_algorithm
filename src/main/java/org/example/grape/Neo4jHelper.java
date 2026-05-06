@@ -1,7 +1,9 @@
 package org.example.grape;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.neo4j.driver.*;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.util.Pair;
@@ -48,6 +50,35 @@ public class Neo4jHelper {
                     }
                 }
             }
+        }
+
+        return resultList;
+    }
+
+    public List<Map.Entry<String, Integer>> getUsersWithHopsToObserver(String observer, Integer maxHops) {
+        String maxHopsStr = (maxHops != null) ? maxHops.toString() : "";
+
+        String query =
+                "MATCH p = (u:NostrUser {pubkey: $pubkey})-[:FOLLOWS*1.." + maxHopsStr + "]->(other:NostrUser) " +
+                "WHERE other <> u " +
+                "WITH other.pubkey AS pubkey, min(length(p)) AS hops " +
+                "RETURN pubkey, hops";
+
+        List<Map.Entry<String, Integer>> resultList = new ArrayList<>();
+
+        try (Session session = driver.session()) {
+            session.executeRead(tx -> {
+                Result result = tx.run(query, Values.parameters("pubkey", observer));
+
+                while (result.hasNext()) {
+                    Record record = result.next();
+                    resultList.add(new AbstractMap.SimpleEntry<>(
+                            record.get("pubkey").asString(),
+                            record.get("hops").asInt()
+                    ));
+                }
+                return null;
+            });
         }
 
         return resultList;
