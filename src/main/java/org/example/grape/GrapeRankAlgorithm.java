@@ -5,71 +5,136 @@ import java.util.Collections;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.DoubleAccumulator;
+import java.util.stream.IntStream;
 
 public class GrapeRankAlgorithm {
+
+    private static final boolean DEBUG_LOG_ROUNDS = false;
 
     public static GrapeRankAlgorithmResult graperankAlgorithm(
             Map<String, List<GrapeRankInput>> graperankInputs,
             Map<String, ScoreCard> graperankScorecards) {
 
-        int rounds = 0;
-        boolean shouldBreak;
-
-        while (true) {
-            shouldBreak = true;
-
+        int n = graperankScorecards.size();
+        ScoreCard[] cards = new ScoreCard[n];
+        Map<String, Integer> indexOf = new HashMap<>(n * 2);
+        {
+            int i = 0;
             for (Map.Entry<String, ScoreCard> entry : graperankScorecards.entrySet()) {
-                ScoreCard scorecard = entry.getValue();
+                cards[i] = entry.getValue();
+                indexOf.put(entry.getKey(), i);
+                i++;
+            }
+        }
 
-                if (scorecard.getObserver().equals(scorecard.getObservee())) {
-                    continue;
+        int[][] raterIndices = new int[n][];
+        double[][] ratings = new double[n][];
+        double[][] confidences = new double[n][];
+        boolean[] skip = new boolean[n];
+
+        for (int i = 0; i < n; i++) {
+            ScoreCard sc = cards[i];
+            if (sc.getObserver().equals(sc.getObservee())) {
+                skip[i] = true;
+                raterIndices[i] = new int[0];
+                ratings[i] = new double[0];
+                confidences[i] = new double[0];
+                continue;
+            }
+            List<GrapeRankInput> relevantDataPoints =
+                    graperankInputs.getOrDefault(sc.getObservee(), List.of());
+            int m = relevantDataPoints.size();
+            int[] idxArr = new int[m];
+            double[] rArr = new double[m];
+            double[] cArr = new double[m];
+            for (int j = 0; j < m; j++) {
+                GrapeRankInput dp = relevantDataPoints.get(j);
+                idxArr[j] = indexOf.get(dp.getRater());
+                rArr[j] = dp.getRating();
+                cArr[j] = dp.getConfidence();
+            }
+            raterIndices[i] = idxArr;
+            ratings[i] = rArr;
+            confidences[i] = cArr;
+        }
+
+        double[] prevInfluence = new double[n];
+        double[] nextInfluence = new double[n];
+        double[] avgScores = new double[n];
+        double[] sumWeights = new double[n];
+        double[] confidenceOut = new double[n];
+        for (int i = 0; i < n; i++) {
+            prevInfluence[i] = cards[i].getInfluence();
+            nextInfluence[i] = prevInfluence[i];
+            avgScores[i] = cards[i].getAverageScore();
+            sumWeights[i] = cards[i].getInput();
+            confidenceOut[i] = cards[i].getConfidence();
+        }
+
+        final double threshold = Constants.THRESHOLD_OF_LOOP_BREAK_GIVEN_MINIMUM_DELTA_INFLUENCE;
+        final double globalAttenuation = Constants.GLOBAL_ATTENUATION_FACTOR;
+        final double globalRigor = Constants.GLOBAL_RIGOR;
+
+        int rounds = 0;
+        while (true) {
+            final double[] prev = prevInfluence;
+            final double[] next = nextInfluence;
+            final DoubleAccumulator maxDelta = new DoubleAccumulator(Math::max, 0.0);
+
+            IntStream.range(0, n).parallel().forEach(i -> {
+                if (skip[i]) {
+                    next[i] = prev[i];
+                    return;
                 }
-
-                // handling empty case. to investigate later
-                List<GrapeRankInput> relevantDataPoints = graperankInputs.getOrDefault(scorecard.getObservee(),List.of());
-
+                int[] raterIdx = raterIndices[i];
+                double[] rArr = ratings[i];
+                double[] cArr = confidences[i];
                 double sumOfWeights = 0;
                 double sumOfWxr = 0;
-
-                for (GrapeRankInput relevantDataPoint : relevantDataPoints) {
-                    double infOfRater = graperankScorecards.get(relevantDataPoint.getRater()).getInfluence();
-                    double weight = relevantDataPoint.getConfidence()
-                            * infOfRater
-                            * Constants.GLOBAL_ATTENUATION_FACTOR;
-
-                    double wxr = weight * relevantDataPoint.getRating();
-
+                for (int j = 0; j < raterIdx.length; j++) {
+                    double infOfRater = prev[raterIdx[j]];
+                    double weight = cArr[j] * infOfRater * globalAttenuation;
                     sumOfWeights += weight;
-                    sumOfWxr += wxr;
+                    sumOfWxr += weight * rArr[j];
                 }
-
                 double avgScore = (sumOfWeights != 0) ? sumOfWxr / sumOfWeights : 0;
-                scorecard.setAverageScore(avgScore);
-                scorecard.setInput(sumOfWeights);
+                double conf = convertInputToConfidence(sumOfWeights, globalRigor);
+                double computedInfluence = Math.max(avgScore * conf, 0);
+                double deltaInfluence = Math.abs(computedInfluence - prev[i]);
 
-                // Convert input to confidence (you need to define the logic for this)
-                scorecard.setConfidence(convertInputToConfidence(scorecard.getInput(), Constants.GLOBAL_RIGOR));
+                avgScores[i] = avgScore;
+                sumWeights[i] = sumOfWeights;
+                confidenceOut[i] = conf;
+                next[i] = computedInfluence;
+                maxDelta.accumulate(deltaInfluence);
+            });
 
-                double computedInfluence = Math.max(scorecard.getAverageScore() * scorecard.getConfidence(), 0);
-                double deltaInfluence = Math.abs(computedInfluence - scorecard.getInfluence());
-
-                if (deltaInfluence > Constants.THRESHOLD_OF_LOOP_BREAK_GIVEN_MINIMUM_DELTA_INFLUENCE) {
-                    shouldBreak = false;
-                }
-
-                scorecard.setInfluence(computedInfluence);
-            }
+            double[] tmp = prevInfluence;
+            prevInfluence = nextInfluence;
+            nextInfluence = tmp;
 
             rounds++;
-            System.out.println("NUMBER OF ROUNDS: " + rounds);
 
-            if (shouldBreak) {
+            if (maxDelta.get() <= threshold) {
                 break;
             }
         }
 
-        for (ScoreCard scorecard : graperankScorecards.values()) {
-            scorecard.setVerified(scorecard.getInfluence() >= Constants.DEFAULT_CUTOFF_OF_VALID_USER);
+        if (DEBUG_LOG_ROUNDS) {
+            System.out.println("NUMBER OF ROUNDS: " + rounds);
+        }
+
+        double[] finalInfluence = prevInfluence;
+        for (int i = 0; i < n; i++) {
+            ScoreCard sc = cards[i];
+            if (!skip[i]) {
+                sc.setAverageScore(avgScores[i]);
+                sc.setInput(sumWeights[i]);
+                sc.setConfidence(confidenceOut[i]);
+                sc.setInfluence(finalInfluence[i]);
+            }
+            sc.setVerified(sc.getInfluence() >= Constants.DEFAULT_CUTOFF_OF_VALID_USER);
         }
 
         return new GrapeRankAlgorithmResult(graperankScorecards, rounds);
