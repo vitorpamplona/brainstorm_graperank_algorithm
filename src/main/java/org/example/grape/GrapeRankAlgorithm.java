@@ -162,7 +162,26 @@ public class GrapeRankAlgorithm {
         return result;
     }
 
-    private static final int BATCH_SIZE = 1000;
+    private static final int BATCH_SIZE;
+
+    static {
+        int defaultBatchSize = 5000;
+        String envValue = System.getenv("GRAPERANK_BATCH_SIZE");
+        int parsed = defaultBatchSize;
+        if (envValue != null && !envValue.isEmpty()) {
+            try {
+                int candidate = Integer.parseInt(envValue.trim());
+                if (candidate > 0) {
+                    parsed = candidate;
+                } else {
+                    System.err.println("GRAPERANK_BATCH_SIZE must be positive; using default " + defaultBatchSize);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid GRAPERANK_BATCH_SIZE='" + envValue + "'; using default " + defaultBatchSize);
+            }
+        }
+        BATCH_SIZE = parsed;
+    }
 
     public static <T> List<List<T>> chunked(List<T> seq, int size) {
         List<List<T>> chunks = new ArrayList<>();
@@ -200,8 +219,8 @@ public class GrapeRankAlgorithm {
 
 
 
-        int numOfIts = (int) Math.round((double) relevantUsers.size() / BATCH_SIZE);
-        System.out.println("How many Neo4j iterations: " + numOfIts);
+        int numOfIts = (relevantUsers.size() + BATCH_SIZE - 1) / BATCH_SIZE;
+        System.out.println("Neo4j batch iterations planned: " + numOfIts + " (batch size " + BATCH_SIZE + ", users " + relevantUsers.size() + ")");
 
         Map<String, List<GrapeRankInput>> graperankInputs = new HashMap<>();
 
